@@ -4,7 +4,11 @@ php artisan ide:generate
 .\
 docker-compose up
 docker-compose exec admin_app sh
+docker-php-ext-install sockets
+
+docker-compose up
 docker-compose exec main_app sh
+docker-php-ext-install sockets
 
 php artisan make:migration create_products_table
 php artisan make:factory ProductFactory
@@ -14,3 +18,12 @@ php artisan make:seeder UserSeeder
 php artisan migrate
 php artisan db:seed
 php artisan make:controller ProductController
+
+
+php artisan make:command FireEvent
+
+php artisan make:job TestJob
+
+
+php artisan queue:work
+
