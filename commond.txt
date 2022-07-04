@@ -1,8 +1,10 @@
-..\..\composer create-project --prefer-dist laravel/laravel admin
+..\composer create-project --prefer-dist laravel/laravel admin
 ..\..\composer require --dev barryvdh/laravel-ide-helper
 php artisan ide:generate
 .\
 docker-compose up
+docker-compose exec admin_app sh
+docker-compose exec main_app sh
 
 php artisan make:migration create_products_table
 php artisan make:factory ProductFactory

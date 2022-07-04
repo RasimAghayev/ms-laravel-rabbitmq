@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  main_db:
+    container_name: main_db
+    image: mysql:8.0
+    volumes:
+      - ./storage/dbdata:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=main
+      - MYSQL_PASSWORD=root
+    ports:
+      - "33064:3306"
+  main_app:
+    container_name: main_app
+    depends_on:
+      - main_db
+    build: .
+    entrypoint: /usr/local/bin/docker-php-entrypoint-dev
+    volumes:
+      - .:/var/www
+    command: ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisord.conf"]
+    environment:
+      - APP_ENV=local
+      - APP_KEY=base64:tLmYfUrrZITzLIkSjFnV+PCAFxkdU+duUxjVSIlrrHo=
+      - APP_DEBUG=true
+      - DB_CONNECTION=mysql
+      - DB_HOST=main_db
+      - DB_PORT=3306
+      - DB_DATABASE=main
+      - DB_USERNAME=root
+      - DB_PASSWORD=root
+    restart: unless-stopped
+    ports:
+      - 8001:80
+volumes:
+  main_db-data:
