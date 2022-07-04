@@ -9,7 +9,6 @@ services:
     environment:
       - MYSQL_ROOT_PASSWORD=root
       - MYSQL_DATABASE=admin
-      - MYSQL_USER=root
       - MYSQL_PASSWORD=root
     ports:
       - "33063:3306"
@@ -27,8 +26,8 @@ services:
       - APP_KEY=base64:tLmYfUrrZITzLIkSjFnV+PCAFxkdU+duUxjVSIlrrHo=
       - APP_DEBUG=true
       - DB_CONNECTION=mysql
-      - DB_HOST=127.0.0.1
-      - DB_PORT=33063
+      - DB_HOST=admin_db
+      - DB_PORT=3306
       - DB_DATABASE=admin
       - DB_USERNAME=root
       - DB_PASSWORD=root
