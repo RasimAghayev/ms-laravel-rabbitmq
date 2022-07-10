@@ -24,6 +24,6 @@ php artisan make:command FireEvent
 
 php artisan make:job TestJob
 
-
+php artisan fire
 php artisan queue:work
 

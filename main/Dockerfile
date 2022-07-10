@@ -8,7 +8,7 @@ ENV PATH="/composer/vendor/bin:$PATH" \
 
 # install composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
-    && composer --ansi --version --no-interaction
+    && composer --ansi --version --no-interaction && docker-php-ext-install sockets
 
 # install application dependencies
 WORKDIR /var/www
