@@ -27,3 +27,4 @@ php artisan make:job TestJob
 php artisan fire
 php artisan queue:work
 
+php artisan make:job ProductCreated
