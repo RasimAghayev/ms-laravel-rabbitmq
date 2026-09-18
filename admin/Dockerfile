@@ -1,4 +1,9 @@
-FROM fhsinchy/php-nginx-base:php8.1.3-fpm-nginx1.20.2-alpine3.15
+FROM php:8.5-fpm-alpine
+
+# nginx + supervisor + build deps for PHP extensions, then prune build deps
+RUN apk add --no-cache nginx supervisor dos2unix curl linux-headers $PHPIZE_DEPS \
+    && docker-php-ext-install pdo_mysql sockets pcntl bcmath \
+    && apk del $PHPIZE_DEPS
 
 # set composer related environment variables
 ENV PATH="/composer/vendor/bin:$PATH" \
@@ -22,8 +27,7 @@ ENV FPM_PM_MAX_CHILDREN=20 \
     FPM_PM_MAX_SPARE_SERVERS=3
 
 # set application environment variables
-ENV APP_NAME="Question Board" \
-    APP_ENV=local \
+ENV APP_ENV=local \
     APP_DEBUG=false
 
 # copy entrypoint files
@@ -34,6 +38,9 @@ RUN dos2unix /usr/local/bin/docker-php-entrypoint-dev
 # copy nginx configuration
 COPY ./docker/nginx.conf /etc/nginx/nginx.conf
 COPY ./docker/default.conf /etc/nginx/conf.d/default.conf
+
+# copy supervisor configuration
+COPY ./docker/supervisord.conf /etc/supervisord.conf
 
 # copy application code
 WORKDIR /var/www
