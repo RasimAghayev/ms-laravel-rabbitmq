@@ -1,39 +1,148 @@
-version: "3.8"
-
 services:
   admin_db:
-    container_name: admin_db
     image: mysql:8.4
-    volumes:
-      - ./storage/dbdata:/var/lib/mysql
+    container_name: admin_db
     environment:
-      - MYSQL_ROOT_PASSWORD=root
-      - MYSQL_DATABASE=admin
-      - MYSQL_USER=root
-      - MYSQL_PASSWORD=root
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${ADMIN_DB_DATABASE}
+      MYSQL_USER: ${ADMIN_DB_USERNAME}
+      MYSQL_PASSWORD: ${ADMIN_DB_PASSWORD}
+    volumes:
+      - admin_db_data:/var/lib/mysql
     ports:
       - "33063:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  main_db:
+    image: mysql:8.4
+    container_name: main_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MAIN_DB_DATABASE}
+      MYSQL_USER: ${MAIN_DB_USERNAME}
+      MYSQL_PASSWORD: ${MAIN_DB_PASSWORD}
+    volumes:
+      - main_db_data:/var/lib/mysql
+    ports:
+      - "33064:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4.3.4-management-alpine
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   admin_app:
     container_name: admin_app
+    build: ./admin
     depends_on:
-      - admin_db
-    build: .
+      admin_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     entrypoint: /usr/local/bin/docker-php-entrypoint-dev
     volumes:
-      - .:/var/www
+      - ./admin:/var/www
     command: ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisord.conf"]
     environment:
-      - APP_ENV=local
-      - APP_KEY=base64:tLmYfUrrZITzLIkSjFnV+PCAFxkdU+duUxjVSIlrrHo=
-      - APP_DEBUG=true
-      - DB_CONNECTION=mysql
-      - DB_HOST=127.0.0.1
-      - DB_PORT=33063
-      - DB_DATABASE=admin
-      - DB_USERNAME=root
-      - DB_PASSWORD=root
+      APP_ENV: local
+      APP_KEY: ${ADMIN_APP_KEY}
+      APP_DEBUG: "true"
+      DB_CONNECTION: mysql
+      DB_HOST: admin_db
+      DB_PORT: 3306
+      DB_DATABASE: ${ADMIN_DB_DATABASE}
+      DB_USERNAME: ${ADMIN_DB_USERNAME}
+      DB_PASSWORD: ${ADMIN_DB_PASSWORD}
+      QUEUE_CONNECTION: rabbitmq
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: /
     restart: unless-stopped
     ports:
-      - 8000:80
+      - "8000:80"
+
+  main_app:
+    container_name: main_app
+    build: ./main
+    depends_on:
+      main_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    entrypoint: /usr/local/bin/docker-php-entrypoint-dev
+    volumes:
+      - ./main:/var/www
+    command: ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisord.conf"]
+    environment:
+      APP_ENV: local
+      APP_KEY: ${MAIN_APP_KEY}
+      APP_DEBUG: "true"
+      DB_CONNECTION: mysql
+      DB_HOST: main_db
+      DB_PORT: 3306
+      DB_DATABASE: ${MAIN_DB_DATABASE}
+      DB_USERNAME: ${MAIN_DB_USERNAME}
+      DB_PASSWORD: ${MAIN_DB_PASSWORD}
+      QUEUE_CONNECTION: rabbitmq
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: /
+    restart: unless-stopped
+    ports:
+      - "8001:80"
+
+  main_worker:
+    container_name: main_worker
+    build: ./main
+    depends_on:
+      main_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./main:/var/www
+    command: ["php", "artisan", "queue:work", "rabbitmq", "--queue=default", "--tries=3", "--sleep=3"]
+    environment:
+      APP_ENV: local
+      APP_KEY: ${MAIN_APP_KEY}
+      APP_DEBUG: "true"
+      DB_CONNECTION: mysql
+      DB_HOST: main_db
+      DB_PORT: 3306
+      DB_DATABASE: ${MAIN_DB_DATABASE}
+      DB_USERNAME: ${MAIN_DB_USERNAME}
+      DB_PASSWORD: ${MAIN_DB_PASSWORD}
+      QUEUE_CONNECTION: rabbitmq
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: /
+    restart: unless-stopped
+
 volumes:
-  admin_db-data:
+  admin_db_data:
+  main_db_data:
