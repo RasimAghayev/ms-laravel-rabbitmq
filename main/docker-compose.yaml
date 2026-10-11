@@ -3,7 +3,7 @@ version: "3.8"
 services:
   main_db:
     container_name: main_db
-    image: mysql:8.0
+    image: mysql:8.4
     volumes:
       - ./storage/dbdata:/var/lib/mysql
     environment:
