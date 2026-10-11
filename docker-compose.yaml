@@ -36,7 +36,7 @@ services:
       retries: 10
 
   rabbitmq:
-    image: rabbitmq:4.3.4-management-alpine
+    image: rabbitmq:4.3.6-management-alpine
     container_name: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
