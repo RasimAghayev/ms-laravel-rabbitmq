@@ -1,5 +1,7 @@
 # ms-laravel-rabbitmq
 
+![Views](https://hits.sh/github.com/RasimAghayev/ms-laravel-rabbitmq.svg?label=views&color=0e75b6)
+
 Two independent Laravel apps — `admin/` (write side) and `main/` (read
 side) — kept in sync via RabbitMQ. `admin` owns the `products` REST API;
 every create/update/delete both writes to `admin`'s own database and
