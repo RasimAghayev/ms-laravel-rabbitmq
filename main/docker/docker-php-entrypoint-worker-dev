@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+cd /var/www
+
+# main_worker shares main_app's bind-mounted vendor/ (both mount
+# ./main:/var/www on a fresh clone). main_app owns installing it
+# (docker-php-entrypoint-dev); this just waits instead of running a
+# second composer install that would race the same files. If main_app
+# never finishes, fail loudly after 10 minutes rather than hang
+# forever with no clue why.
+waited=0
+while [ ! -f vendor/.install-complete ]; do
+    if [ "$waited" -ge 600 ]; then
+        echo "vendor/.install-complete still missing after ${waited}s - is main_app running and installing?" >&2
+        exit 1
+    fi
+    sleep 2
+    waited=$((waited + 2))
+done
+
+exec "$@"
