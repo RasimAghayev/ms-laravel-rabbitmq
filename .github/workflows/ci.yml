@@ -1,0 +1,81 @@
+name: CI
+
+# The whole quality gate runs inside the project's own Docker images (the
+# same docker-compose.yaml used for local dev), so the runner needs a
+# Docker daemon and nothing else. No PHP toolchain is installed on the
+# runner.
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+# The pipeline only reads the repository. It never publishes anything and
+# never writes to the GitHub API.
+permissions:
+  contents: read
+
+jobs:
+  quality-gates:
+    name: Docker quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Create the local environment file
+        # CI-only values, generated fresh on every run - never committed,
+        # never reused outside this job.
+        run: |
+          cp .env.example .env
+          sed -i "s/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=$(openssl rand -hex 16)/" .env
+          sed -i "s/^ADMIN_DB_PASSWORD=.*/ADMIN_DB_PASSWORD=$(openssl rand -hex 16)/" .env
+          sed -i "s/^MAIN_DB_PASSWORD=.*/MAIN_DB_PASSWORD=$(openssl rand -hex 16)/" .env
+          sed -i "s#^ADMIN_APP_KEY=.*#ADMIN_APP_KEY=base64:$(openssl rand -base64 32)#" .env
+          sed -i "s#^MAIN_APP_KEY=.*#MAIN_APP_KEY=base64:$(openssl rand -base64 32)#" .env
+
+      - name: Validate the compose file
+        run: docker compose config --quiet
+
+      - name: Build all images
+        run: docker compose build
+
+      - name: Start the stack
+        run: docker compose up -d
+
+      - name: Wait for both apps to finish installing vendor/
+        # The dev entrypoints run `composer install` on first boot (see
+        # docker/docker-php-entrypoint-dev); give that time to finish
+        # before running artisan commands against either app.
+        run: |
+          for svc in admin_app main_app; do
+            echo "waiting for $svc..."
+            timeout 180 sh -c "until docker compose exec -T $svc test -f vendor/.install-complete; do sleep 2; done"
+          done
+
+      - name: Run database migrations
+        run: |
+          docker compose exec -T admin_app php artisan migrate --force
+          docker compose exec -T main_app php artisan migrate --force
+
+      - name: Run the admin test suite
+        run: docker compose exec -T admin_app php artisan test
+
+      - name: Run the main test suite
+        run: docker compose exec -T main_app php artisan test
+
+      - name: Audit admin dependencies
+        run: docker compose exec -T admin_app composer audit --no-interaction --abandoned=report
+
+      - name: Audit main dependencies
+        run: docker compose exec -T main_app composer audit --no-interaction --abandoned=report
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down the stack
+        if: always()
+        run: docker compose down -v
