@@ -32,12 +32,14 @@ different implementations, one shared queue — this is how eventual
 consistency happens here, and it's why the job class names must stay
 identical between the two apps if either is changed.
 
-This was verified end-to-end in Docker for this task (`POST`/`PUT`
-/`DELETE` against `admin`'s API, confirmed via `main`'s own database
-state and the worker's log output after each step) — the first time
-this flow has ever actually been run, going by this repo's git history.
-It previously existed only as application code on unmerged branches with
-no working Docker path to stand it up.
+This was verified end-to-end in Docker (`POST`/`PUT`/`DELETE` against
+`admin`'s API, confirmed via `main`'s own database state and the
+worker's log output after each step). An earlier pass had already run
+this once, but only from a workstation with a `vendor/` already
+installed locally — on a genuinely fresh clone, the containers
+crash-looped on a missing autoloader (see the fix below). That gap is
+now closed and this was re-verified from a truly fresh clone, following
+exactly the steps below with no manual step outside them.
 
 ## Running it
 
@@ -99,6 +101,18 @@ and no way to build. This pass:
   `.env.example` (`guest` is RabbitMQ's default *username*, not a
   vhost; a fresh broker has no vhost named `guest`, so the AMQP
   connection would have failed for anyone following the example file).
+- Fixed a fresh-clone bootstrap bug: the dev containers bind-mount
+  `./admin:/var/www` and `./main:/var/www`, which replaces each
+  image's own built `vendor/` with whatever is on the host — nothing,
+  on a fresh clone, since `vendor/` is gitignored. The dev entrypoints
+  only ran `composer dump-autoload` (regenerate from an *existing*
+  `vendor/`), never `composer install`, so the steps above previously
+  crash-looped all three app containers unless you'd already run
+  `composer install` locally first, outside the documented flow. The
+  entrypoints now install automatically when `vendor/` is missing.
+  `main_app` and `main_worker` share the same mount; only `main_app`
+  installs, `main_worker` just waits for it rather than racing a
+  second install against the same files.
 
 ## Known issues (flagged, not fixed)
 

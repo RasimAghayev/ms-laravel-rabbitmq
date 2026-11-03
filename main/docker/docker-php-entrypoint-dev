@@ -13,8 +13,28 @@ chown -R :www-data /var/www
 chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
 # run last minute build tools just for local dev
+#
+# the dev bind mount (./main:/var/www) replaces this image's own built
+# vendor/ with whatever is on the host, so a fresh clone with no local
+# vendor/ needs a full install here, not just an autoload regen. This
+# container is the sole owner of that install - main_worker shares the
+# same mount but never installs itself, it just waits for this to
+# finish (see docker-php-entrypoint-worker-dev), so there's no race to
+# guard against here.
+#
+# vendor/autoload.php existing isn't proof the install actually
+# finished - composer writes it as part of generating the autoloader,
+# which can itself get interrupted (e.g. the container being stopped
+# mid-install), leaving an autoload.php that references package files
+# which were never extracted. Use a marker written only once composer
+# install has fully succeeded instead.
 cd /var/www
-composer dump-autoload
+if [ ! -f vendor/.install-complete ]; then
+    composer install --no-interaction --ansi
+    touch vendor/.install-complete
+else
+    composer dump-autoload
+fi
 cd /var/www/public
 
 exec "$@"

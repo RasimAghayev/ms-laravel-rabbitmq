@@ -34,6 +34,7 @@ ENV APP_ENV=local \
 COPY ./docker/docker-php-* /usr/local/bin/
 RUN dos2unix /usr/local/bin/docker-php-entrypoint
 RUN dos2unix /usr/local/bin/docker-php-entrypoint-dev
+RUN dos2unix /usr/local/bin/docker-php-entrypoint-worker-dev
 
 # copy nginx configuration
 COPY ./docker/nginx.conf /etc/nginx/nginx.conf
