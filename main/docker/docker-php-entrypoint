@@ -3,7 +3,7 @@ set -e
 
 # write the php-fpm config
 { \
-    echo listen = /var/run/php-fpm.sock; \
+    echo listen = /tmp/php-fpm.sock; \
     echo listen.owner = www-data; \
     echo listen.group = www-data; \
     echo pm.max_children = "$FPM_PM_MAX_CHILDREN"; \
