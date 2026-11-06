@@ -115,6 +115,16 @@ and no way to build. This pass:
   `main_app` and `main_worker` share the same mount; only `main_app`
   installs, `main_worker` just waits for it rather than racing a
   second install against the same files.
+- **Container baseline (Phase 5):** both Dockerfiles rebuilt as
+  explicit multi-stage `base -> deps/test-deps -> build -> test ->
+  runtime` images, non-root at runtime, with a real Docker `test`
+  stage that actually gates (`make verify` = build + test; `make up`
+  depends on it). Removed `admin/docker-compose.yaml` and
+  `main/docker-compose.yaml` — stale duplicates of this file from the
+  repo's first commit that this modernization pass's "rotated the
+  hardcoded `APP_KEY`/`root` credentials" bullet above had missed;
+  both still carried the original plaintext values. See
+  `docs/BASELINE.md` for full evidence and the secrets finding.
 
 ## Known issues (flagged, not fixed)
 
