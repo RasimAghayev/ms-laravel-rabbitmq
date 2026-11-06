@@ -1,0 +1,14 @@
+.git
+.github
+.idea
+.vscode
+vendor
+node_modules
+_ide_helper.php
+.env
+.env.*
+!.env.example
+.phpunit.result.cache
+*.md
+docs
+storage/dbdata

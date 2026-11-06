@@ -39,38 +39,39 @@ jobs:
       - name: Validate the compose file
         run: docker compose config --quiet
 
-      - name: Build all images
-        run: docker compose build
+      # `make verify` = build every service's image + run the Docker
+      # standard's `test` stage for both apps (migrate, `artisan test`,
+      # `composer audit`) via the `admin_test`/`main_test` profile
+      # services - the same gate a local `make verify` runs, so CI and a
+      # developer's machine can never silently disagree about what
+      # "passing" means. Replaces the previous exec-into-a-dev-container
+      # flow, which no longer applies now that `admin_app`/`main_app`/
+      # `main_worker` run the built `runtime` image with no bind mount
+      # (Phase 5, container baseline).
+      - name: make verify (build + test stage, both apps)
+        run: make verify
 
-      - name: Start the stack
-        run: docker compose up -d
+      # `make up` depends on `verify` and never runs otherwise (CLAUDE.md
+      # standing decision 2) - starting the real runtime stack here proves
+      # the images that just passed verify also boot, migrate cleanly, and
+      # report healthy, not just that the test stage passed in isolation.
+      - name: make up (runtime stack)
+        run: make up
 
-      - name: Wait for both apps to finish installing vendor/
-        # The dev entrypoints run `composer install` on first boot (see
-        # docker/docker-php-entrypoint-dev); give that time to finish
-        # before running artisan commands against either app.
+      - name: Wait for all three app containers to report healthy
         run: |
-          for svc in admin_app main_app; do
+          for svc in admin_app main_app main_worker; do
             echo "waiting for $svc..."
-            timeout 180 sh -c "until docker compose exec -T $svc test -f vendor/.install-complete; do sleep 2; done"
+            timeout 60 sh -c "until [ \"\$(docker inspect -f '{{.State.Health.Status}}' $svc)\" = healthy ]; do sleep 2; done"
           done
 
-      - name: Run database migrations
+      - name: Confirm runtime containers run as non-root
         run: |
-          docker compose exec -T admin_app php artisan migrate --force
-          docker compose exec -T main_app php artisan migrate --force
-
-      - name: Run the admin test suite
-        run: docker compose exec -T admin_app php artisan test
-
-      - name: Run the main test suite
-        run: docker compose exec -T main_app php artisan test
-
-      - name: Audit admin dependencies
-        run: docker compose exec -T admin_app composer audit --no-interaction --abandoned=report
-
-      - name: Audit main dependencies
-        run: docker compose exec -T main_app composer audit --no-interaction --abandoned=report
+          for svc in admin_app main_app main_worker; do
+            user=$(docker compose exec -T "$svc" whoami)
+            echo "$svc runs as: $user"
+            [ "$user" = "www-data" ] || { echo "::error::$svc is not running as www-data"; exit 1; }
+          done
 
       - name: Dump logs on failure
         if: failure()
