@@ -1,0 +1,41 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "baseBranches": ["preview"],
+  "timezone": "UTC",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Composer (PHP) - admin/ and main/, both app roots; auto-detected, no explicit matchFileNames needed.",
+      "matchManagers": ["composer"],
+      "prConcurrentLimit": 10,
+      "commitMessagePrefix": "build(deps)",
+      "addLabels": ["composer"]
+    },
+    {
+      "description": "Composer dev-only requires get the dependabot-style dev prefix.",
+      "matchManagers": ["composer"],
+      "matchDepTypes": ["require-dev"],
+      "commitMessagePrefix": "build(deps-dev)"
+    },
+    {
+      "description": "Docker base images (php, mysql, rabbitmq, composer) pinned by digest in the Dockerfiles and docker-compose.yaml.",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "prConcurrentLimit": 5,
+      "commitMessagePrefix": "build(deps)",
+      "addLabels": ["docker"]
+    },
+    {
+      "description": "GitHub Actions, pinned by commit SHA (see .github/workflows/ci.yml).",
+      "matchManagers": ["github-actions"],
+      "prConcurrentLimit": 5,
+      "commitMessagePrefix": "ci(deps)",
+      "addLabels": ["github-actions"]
+    }
+  ],
+  "npm": {
+    "enabled": false
+  },
+  "ignorePaths": []
+}
