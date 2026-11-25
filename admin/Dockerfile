@@ -115,7 +115,7 @@ EXPOSE 8080
 STOPSIGNAL SIGTERM
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 \
-    CMD wget -q -O- http://127.0.0.1:8080/ >/dev/null 2>&1 || exit 1
+    CMD wget -q -O- http://127.0.0.1:8080/health/ready >/dev/null 2>&1 || exit 1
 
 ENTRYPOINT ["docker-php-entrypoint"]
 CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisord.conf"]
