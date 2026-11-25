@@ -6,9 +6,9 @@ name: CI
 # runner.
 on:
   push:
-    branches: [main]
+    branches: [preview, test, main]
   pull_request:
-    branches: [main]
+    branches: [preview, test, main]
 
 # The pipeline only reads the repository. It never publishes anything and
 # never writes to the GitHub API.
