@@ -6,9 +6,9 @@ name: CI
 # runner.
 on:
   push:
-    branches: [main]
+    branches: [preview, test, main]
   pull_request:
-    branches: [main]
+    branches: [preview, test, main]
 
 # The pipeline only reads the repository. It never publishes anything and
 # never writes to the GitHub API.
@@ -59,10 +59,17 @@ jobs:
         run: make up
 
       - name: Wait for all three app containers to report healthy
+        # docker-compose.yaml no longer sets container_name: (removed so
+        # multiple concurrent stacks of this repo don't collide on name -
+        # see git history), so the real container name is now
+        # Compose-project-prefixed, not the bare service name. Resolve
+        # each service's actual container ID via `compose ps -q` before
+        # inspecting it.
         run: |
           for svc in admin_app main_app main_worker; do
             echo "waiting for $svc..."
-            timeout 60 sh -c "until [ \"\$(docker inspect -f '{{.State.Health.Status}}' $svc)\" = healthy ]; do sleep 2; done"
+            id=$(docker compose ps -q "$svc")
+            timeout 60 sh -c "until [ \"\$(docker inspect -f '{{.State.Health.Status}}' $id)\" = healthy ]; do sleep 2; done"
           done
 
       - name: Confirm runtime containers run as non-root

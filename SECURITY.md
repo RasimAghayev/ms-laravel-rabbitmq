@@ -2,12 +2,14 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+This repository is unversioned (no release tags) — `admin/` and `main/`
+are each shipped as a rolling release off the `main` branch (reached via
+`preview -> test -> main`, see `CONTRIBUTING.md`). Security fixes are
+applied to the current `main` only; there is no older line to maintain.
 
-| Version | Supported          |
+| Branch  | Supported          |
 | ------- | ------------------ |
-| Latest  | :white_check_mark: |
+| `main`  | :white_check_mark: |
 
 ## Reporting a Vulnerability
 

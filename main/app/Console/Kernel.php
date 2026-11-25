@@ -15,7 +15,13 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // $schedule->command('inspire')->hourly();
+        // Drift detector against admin - see
+        // App\Console\Commands\ReconcileProductsCommand for the full
+        // rationale. withoutOverlapping() guards against a slow admin
+        // response letting two runs stack up.
+        $schedule->command('sync:reconcile')
+            ->everyFifteenMinutes()
+            ->withoutOverlapping();
     }
 
     /**

@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -15,4 +16,30 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Health endpoints
+|--------------------------------------------------------------------------
+|
+| Split liveness from readiness (standing decision: dual-mode/
+| distributed-systems hardening) - the container's own HEALTHCHECK
+| (main/Dockerfile) hits /health/ready, so main_app being up but unable
+| to reach its own database is correctly reported unhealthy.
+|
+*/
+
+Route::get('/health/live', function () {
+    return response()->json(['status' => 'ok']);
+});
+
+Route::get('/health/ready', function () {
+    try {
+        DB::connection()->getPdo();
+    } catch (\Throwable $e) {
+        return response()->json(['status' => 'unavailable', 'dependency' => 'database'], 503);
+    }
+
+    return response()->json(['status' => 'ok']);
 });

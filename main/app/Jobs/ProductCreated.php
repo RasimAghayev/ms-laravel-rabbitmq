@@ -2,9 +2,8 @@
 
 namespace App\Jobs;
 
-use App\Models\Product;
+use App\Services\ProductSynchronizer;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -28,18 +27,15 @@ class ProductCreated implements ShouldQueue
     }
 
     /**
-     * Execute the job.
+     * Idempotent upsert - see App\Services\ProductSynchronizer for why a
+     * plain Product::create() is not safe against RabbitMQ's
+     * at-least-once redelivery (duplicate primary key on retry) and why
+     * Created/Updated share this same handling.
      *
      * @return void
      */
     public function handle()
     {
-        Product::create([
-            'id'=>$this->data['id'],
-            'title'=>$this->data['title'],
-            'image'=>$this->data['image'],
-            'created_at'=>$this->data['created_at'],
-            'updated_at'=>$this->data['updated_at'],
-        ]);
+        (new ProductSynchronizer())->syncFromPayload($this->data);
     }
 }

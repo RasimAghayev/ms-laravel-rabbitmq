@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use \App\Http\Controllers\InternalConsistencyController;
 use \App\Http\Controllers\ProductController;
 
 /*
@@ -16,3 +17,9 @@ use \App\Http\Controllers\ProductController;
 */
 
 Route::apiResource('products',ProductController::class);
+
+// Internal reconciliation endpoint - see VerifyInternalToken and
+// App\Services\ProductFingerprint. Polled by main's `sync:reconcile`
+// artisan command, never by a public client.
+Route::get('internal/consistency/products', [InternalConsistencyController::class, 'products'])
+    ->middleware('internal.token');

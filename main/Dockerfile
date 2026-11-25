@@ -4,7 +4,7 @@
 # base - pinned PHP-FPM runtime + the system packages/extensions every later
 # stage needs. Nothing application-specific lives here.
 # ---------------------------------------------------------------------------
-FROM php:8.5-fpm-alpine@sha256:951fb5b1780219b81d5daffa4cebef8e0077c537f3893d9790a5dfcd66ca334d AS base
+FROM php:8.5-fpm-alpine@sha256:51414d5291758fe27f58a64c7e8a078465d32cc7dcef7bda803f5b36019802e0 AS base
 
 # apk upgrade picks up any Alpine 3.24 security patch released after this
 # base image tag was last built (e.g. zlib/musl point releases) - scanned
@@ -25,7 +25,7 @@ WORKDIR /var/www
 # - the composer:2 image alone doesn't have it.
 # ---------------------------------------------------------------------------
 FROM base AS deps
-COPY --from=composer:2@sha256:3d1eb9437516b0ba88c46a0bb05826451a1ab178d29adacb5ded26dad0899ae4 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2@sha256:0049ce90b432795bf413a738b073963ada1a689e1a8708104684baafe94586ec /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 COPY composer.json composer.lock* ./
 RUN --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
 # so switching between the two targets never busts either cache.
 # ---------------------------------------------------------------------------
 FROM base AS test-deps
-COPY --from=composer:2@sha256:3d1eb9437516b0ba88c46a0bb05826451a1ab178d29adacb5ded26dad0899ae4 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2@sha256:0049ce90b432795bf413a738b073963ada1a689e1a8708104684baafe94586ec /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 COPY composer.json composer.lock* ./
 RUN --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
@@ -118,7 +118,7 @@ EXPOSE 8080
 STOPSIGNAL SIGTERM
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 \
-    CMD wget -q -O- http://127.0.0.1:8080/ >/dev/null 2>&1 || exit 1
+    CMD wget -q -O- http://127.0.0.1:8080/health/ready >/dev/null 2>&1 || exit 1
 
 ENTRYPOINT ["docker-php-entrypoint"]
 CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisord.conf"]

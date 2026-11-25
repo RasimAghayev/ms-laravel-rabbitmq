@@ -18,22 +18,35 @@ class ProductController extends Controller
 
     public function show($id)
     {
-        return Product::find($id);
+        return Product::findOrFail($id);
     }
 
     public function store(Request $request)
     {
-        $product=Product::create($request->only('title','image'));
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'image' => ['required', 'string', 'max:255'],
+        ]);
+
+        $product = Product::create($validated);
         ProductCreated::dispatch($product->toArray());
-        return response($product,Response::HTTP_CREATED);
+
+        return response($product, Response::HTTP_CREATED);
     }
 
-    public function update($id,Request $request)
+    public function update($id, Request $request)
     {
-        $product=Product::find($id);
-        $product->update($request->only('title','image'));
+        $product = Product::findOrFail($id);
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'image' => ['required', 'string', 'max:255'],
+        ]);
+
+        $product->update($validated);
         ProductUpdated::dispatch($product->toArray());
-        return response($product,Response::HTTP_ACCEPTED);
+
+        return response($product, Response::HTTP_ACCEPTED);
     }
 
     public function destroy($id)

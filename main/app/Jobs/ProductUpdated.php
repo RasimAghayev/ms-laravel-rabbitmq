@@ -2,9 +2,8 @@
 
 namespace App\Jobs;
 
-use App\Models\Product;
+use App\Services\ProductSynchronizer;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -28,18 +27,18 @@ class ProductUpdated implements ShouldQueue
     }
 
     /**
-     * Execute the job.
+     * Idempotent upsert - see App\Services\ProductSynchronizer. Fixed:
+     * this used to do Product::find($id)->update(...) with no null
+     * check, which was a fatal error whenever an Updated message arrived
+     * before its Created (requeue/retry can reorder messages) or the two
+     * databases had already drifted (docs/TECHNICAL_DEBT.md #11). Sharing
+     * the synchronizer with ProductCreated also means a redelivered
+     * Updated can never apply stale data over something fresher.
      *
      * @return void
      */
     public function handle()
     {
-        $product=Product::find($this->data['id']);
-        $product->update([
-            'title'=>$this->data['title'],
-            'image'=>$this->data['image'],
-            'created_at'=>$this->data['created_at'],
-            'updated_at'=>$this->data['updated_at'],
-        ]);
+        (new ProductSynchronizer())->syncFromPayload($this->data);
     }
 }
