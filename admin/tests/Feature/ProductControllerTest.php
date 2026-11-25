@@ -49,15 +49,14 @@ class ProductControllerTest extends TestCase
         ]);
     }
 
-    public function test_show_returns_an_empty_body_for_a_missing_product()
+    public function test_show_returns_a_404_for_a_missing_product()
     {
-        // ProductController::show() returns Product::find($id) directly with
-        // no not-found handling - a missing id yields a 200 with a null body,
-        // not a 404. Documenting the actual behavior, not the ideal one.
+        // Fixed: show() now uses findOrFail() instead of find(), so a
+        // missing id yields a clean 404 JSON error instead of a 200 with
+        // a null body. See docs/TECHNICAL_DEBT.md for the history.
         $response = $this->getJson('/api/products/999');
 
-        $response->assertOk();
-        $this->assertSame('', $response->getContent());
+        $response->assertNotFound();
     }
 
     public function test_store_creates_a_product_and_dispatches_product_created()
@@ -85,19 +84,55 @@ class ProductControllerTest extends TestCase
         });
     }
 
-    public function test_store_without_a_title_fails_with_a_server_error()
+    public function test_store_without_a_title_fails_with_a_validation_error()
     {
-        // store() passes $request->only('title', 'image') straight to
-        // Product::create() with no validation. The products.title column
-        // has no default, so a request missing it fails as an unhandled
-        // QueryException (500), not a clean 422. Real, pre-existing gap -
-        // documented here, not silently fixed (see TECHNICAL_DEBT.md).
+        // Fixed: store() now validates the request before touching the
+        // database, so a request missing 'title' is a clean 422 instead
+        // of an unhandled 500 QueryException. See docs/TECHNICAL_DEBT.md.
         $response = $this->postJson('/api/products', [
             'image' => 'no-title.png',
         ]);
 
-        $response->assertStatus(500);
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['title']);
         $this->assertDatabaseMissing('products', ['image' => 'no-title.png']);
+    }
+
+    public function test_store_without_an_image_fails_with_a_validation_error()
+    {
+        $response = $this->postJson('/api/products', [
+            'title' => 'No image',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['image']);
+    }
+
+    public function test_update_on_a_missing_product_returns_a_404()
+    {
+        // Fixed: update() now uses findOrFail() before applying the
+        // request, so a missing id is a clean 404 instead of a fatal
+        // "Call to a member function update() on null" error - the same
+        // class of bug already documented (and fixed) on main's side for
+        // ProductUpdated::handle() (see docs/TECHNICAL_DEBT.md #11).
+        $response = $this->putJson('/api/products/999', [
+            'title' => 'Does not exist',
+            'image' => 'missing.png',
+        ]);
+
+        $response->assertNotFound();
+    }
+
+    public function test_update_without_a_title_fails_with_a_validation_error()
+    {
+        $product = Product::factory()->create();
+
+        $response = $this->putJson("/api/products/{$product->id}", [
+            'image' => 'still-here.png',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['title']);
     }
 
     public function test_update_updates_a_product_and_dispatches_product_updated()
