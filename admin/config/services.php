@@ -31,4 +31,9 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // Shared secret for the admin/main internal reconciliation endpoint -
+    // see App\Http\Middleware\VerifyInternalToken. Service-to-service
+    // only, never exposed to a public client.
+    'internal_sync_token' => env('INTERNAL_SYNC_TOKEN'),
+
 ];

@@ -84,6 +84,7 @@ services:
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       RABBITMQ_VHOST: /
+      INTERNAL_SYNC_TOKEN: ${INTERNAL_SYNC_TOKEN}
     restart: unless-stopped
     ports:
       - "8000:8080"
@@ -111,6 +112,8 @@ services:
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       RABBITMQ_VHOST: /
+      ADMIN_BASE_URL: http://admin_app:8080
+      INTERNAL_SYNC_TOKEN: ${INTERNAL_SYNC_TOKEN}
     restart: unless-stopped
     ports:
       - "8001:8080"
@@ -183,6 +186,7 @@ services:
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       RABBITMQ_VHOST: /
+      INTERNAL_SYNC_TOKEN: ${INTERNAL_SYNC_TOKEN}
 
   main_test:
     profiles: ["test"]
@@ -210,6 +214,8 @@ services:
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       RABBITMQ_VHOST: /
+      ADMIN_BASE_URL: http://admin_app:8080
+      INTERNAL_SYNC_TOKEN: ${INTERNAL_SYNC_TOKEN}
 
 volumes:
   admin_db_data:

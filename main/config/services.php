@@ -31,4 +31,13 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // admin's internal-only consistency endpoint - see
+    // App\Console\Commands\ReconcileProductsCommand and, on the admin
+    // side, App\Http\Controllers\InternalConsistencyController +
+    // App\Http\Middleware\VerifyInternalToken.
+    'admin' => [
+        'base_url' => env('ADMIN_BASE_URL'),
+        'internal_sync_token' => env('INTERNAL_SYNC_TOKEN'),
+    ],
+
 ];
