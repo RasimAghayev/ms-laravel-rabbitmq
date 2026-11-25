@@ -32,14 +32,38 @@ Verified directly (2026-11-03): a full `POST`/`PUT`/`DELETE` cycle against `admi
 
 ## Infrastructure
 
-Docker Compose, 6 services:
+Docker Compose, 6 runtime services plus the Docker standard's `test` profile (`admin_test`/`main_test`, never started by `make up`):
 
 | Service | Role |
 |---|---|
-| `admin_db`, `main_db` | Separate MySQL 8.4 instances — `admin`'s data and `main`'s replica are never in the same database. |
+| `admin_db`, `main_db` | Separate MySQL instances (latest stable, pinned by digest — see the Dockerfiles) — `admin`'s data and `main`'s replica are never in the same database. |
 | `rabbitmq` | Message broker; management UI on `15672`. |
-| `admin_app` | nginx + php-fpm under supervisord, entrypoint `docker-php-entrypoint-dev`, dev bind-mount `./admin:/var/www`. Serves the REST API on `8000`. |
-| `main_app` | Same shape as `admin_app`, bind-mount `./main:/var/www`, port `8001`. No product routes — exists for migrations/tinker access and any future read-side API. |
-| `main_worker` | Bare `php artisan queue:work rabbitmq ...`, bind-mount `./main:/var/www`, **no entrypoint override, no supervisord** — just the one worker process as PID 1. |
+| `admin_app` | nginx + php-fpm under supervisord, running the built `runtime` image (no bind mount — what's deployed is exactly what `make verify`'s `test` stage already built and tested). Serves the REST API and `/health/{live,ready}` on `8000`. |
+| `main_app` | Same shape as `admin_app`, port `8001`. No product routes beyond `/health/{live,ready}` — also runs the Laravel scheduler (`schedule:work`, see Drift detection below) as a third supervisord program. |
+| `main_worker` | Runs the built `runtime` image's `php artisan queue:work rabbitmq --queue=default --tries=3 --sleep=3` via a compose `command:` override; healthchecked via a `pgrep` process check rather than the image's own HTTP healthcheck (nginx never starts in this service). |
 
-The dev bind-mounts are intentional for active development (edit on the host, see it live in the container) but they fully replace the image's own build output at `/var/www`, including its `vendor/`. See `REPOSITORY_AUDIT.md` for the consequence of that design on a fresh clone.
+Container baseline (Phase 5) replaced the original dev bind-mounts (`./admin:/var/www`, `./main:/var/www`) with the multi-stage `base -> deps/test-deps -> build -> test -> runtime` pattern — the running container is the tested image, not a live host checkout reinstalled at container start. `docker-compose.yaml` relies on Compose's own `name:`-based project-name prefixing for container naming (no `container_name:` overrides), so the same repo can run multiple isolated stacks (e.g. two phase agents, or a dev stack alongside a test run) without name collisions.
+
+## Idempotent replication (`ProductSynchronizer`)
+
+RabbitMQ gives **at-least-once** delivery, not exactly-once: a message can be redelivered after an ack is lost, a worker crash mid-job, or a `--tries` retry following a transient failure. The original `main`-side job handlers did not account for this — `ProductCreated::handle()` called plain `Product::create()`, which throws on a redelivered message's duplicate primary key, and `ProductUpdated::handle()` called `Product::find($id)->update(...)` with no null check, which fatally errors if the update arrives before its own create (a real possibility once a message is requeued past a worker that's already picked up a later one). Both failure modes permanently broke replication for the affected product once retries were exhausted into `failed_jobs` (see `docs/TECHNICAL_DEBT.md` #10/#11, now resolved).
+
+`main/app/Services/ProductSynchronizer.php` replaces both handlers with one idempotent routine, `syncFromPayload()`:
+
+1. `DB::transaction()` + `lockForUpdate()` on the target row serializes concurrent writes to the *same* product across multiple `main_worker` replicas (the horizontal-scaling case).
+2. The incoming payload's `updated_at` (set once, by `admin`, the single writer) is compared against what's already stored — last-write-wins. No vector clocks or sequence numbers are needed because there is exactly one authority for "when did this change." A stale/duplicate/out-of-order redelivery is recognized and skipped rather than clobbering fresher data.
+3. `Product::upsert()` (`INSERT ... ON DUPLICATE KEY UPDATE`) applies the write as a single atomic statement.
+
+**Known, accepted limitation:** `ProductDeleted` is still a plain `Product::destroy()` with no tombstone. If a `Created`/`Updated` for the same product is redelivered *after* its `Deleted` has already run, the synchronizer has no record the product was ever deleted and will resurrect it. A tombstone table would close this window but was judged disproportionate to this repo's scope (KISS/YAGNI) — documented as a real, intentional gap rather than silently left unexamined.
+
+## Drift detection (reconciliation)
+
+At-least-once delivery plus the limitation above means `admin` and `main` can, in principle, quietly diverge with nothing in either app's logs to show it. Rather than trying to make delivery exactly-once (disproportionate to this repo's scope), both apps independently expose the same cheap drift check:
+
+- `App\Services\ProductFingerprint::compute()` (identical implementation in both apps, same convention as the job classes — no shared package between two independently deployable apps) computes `count` plus an order-independent SHA-256 checksum of every `id:updated_at` pair in its own `products` table.
+- `admin` exposes this at `GET /api/internal/consistency/products`, guarded by `App\Http\Middleware\VerifyInternalToken` — a shared-secret (`X-Internal-Token` header, compared with `hash_equals()`) rather than full auth, proportionate to this being service-to-service traffic under one operator's control (the public products API itself has no auth either; see `docs/TECHNICAL_DEBT.md`).
+- `main`'s `App\Console\Commands\ReconcileProductsCommand` (`sync:reconcile`, scheduled every 15 minutes via `main`'s own `schedule:work` supervisord program) computes its own fingerprint, calls `admin`'s endpoint, and compares. A mismatch is logged as a warning (`Log::warning`, with both sides' count/checksum) and the command exits non-zero — it deliberately does **not** attempt to resolve the drift itself (that would mean either replaying history this architecture never stores, or a full resync, a product-level decision), only raise the alarm.
+
+## Health checks
+
+Both apps expose liveness (`/health/live`, always 200 — "is the process up") separately from readiness (`/health/ready`, 200 only if `DB::connection()->getPdo()` succeeds, else 503 — "can it actually serve a request"). Each Dockerfile's own `HEALTHCHECK` probes `/health/ready`, so a container that's running but can't reach its database is correctly reported unhealthy by `docker inspect`/Compose, not just "it answers HTTP so it must be fine."

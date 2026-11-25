@@ -1,6 +1,7 @@
 # ms-laravel-rabbitmq
 
 ![Views](https://hits.sh/github.com/RasimAghayev/ms-laravel-rabbitmq.svg?label=views&color=0e75b6)
+[![CI](https://github.com/RasimAghayev/ms-laravel-rabbitmq/actions/workflows/ci.yml/badge.svg)](https://github.com/RasimAghayev/ms-laravel-rabbitmq/actions/workflows/ci.yml)
 
 Two independent Laravel apps — `admin/` (write side) and `main/` (read
 side) — kept in sync via RabbitMQ. `admin` owns the `products` REST API;
@@ -48,11 +49,12 @@ exactly the steps below with no manual step outside them.
 ```bash
 cp .env.example .env
 # fill in MYSQL_ROOT_PASSWORD, ADMIN_DB_PASSWORD, MAIN_DB_PASSWORD,
-# ADMIN_APP_KEY, MAIN_APP_KEY (.env.example explains how to generate the keys)
+# ADMIN_APP_KEY, MAIN_APP_KEY, INTERNAL_SYNC_TOKEN
+# (.env.example explains how to generate the keys/token)
 
-docker compose up -d --build
-docker compose exec admin_app php artisan migrate --force
-docker compose exec main_app php artisan migrate --force
+make verify   # build + Docker test stage for both apps - must be green first
+make up       # docker compose up -d --build
+make migrate  # runs `artisan migrate --force` in both admin_app and main_app
 ```
 
 | Service | URL | Purpose |
@@ -62,10 +64,22 @@ docker compose exec main_app php artisan migrate --force
 | `rabbitmq` management UI | http://localhost:15672 | Queue inspection (same user/pass as `RABBITMQ_USER`/`RABBITMQ_PASSWORD`) |
 | `main_worker` | — (no port) | Runs `php artisan queue:work rabbitmq`, consumes `admin`'s jobs into `main`'s database |
 
-`admin_db` and `main_db` are separate MySQL 8.4 instances (`admin`'s
+`admin_db` and `main_db` are separate MySQL instances (`admin`'s
 data and `main`'s replica are never in the same database) — reachable
 from the host on `33063` and `33064` respectively if you need to inspect
 them directly.
+
+Both apps also expose:
+
+- `GET /health/live` — always `200`, "is the process up."
+- `GET /health/ready` — `200` if the app can reach its own database, else
+  `503`. This is what each container's own Docker `HEALTHCHECK` probes.
+- `admin` only: `GET /api/internal/consistency/products`, guarded by a
+  shared-secret `X-Internal-Token` header (`INTERNAL_SYNC_TOKEN`) — polled
+  every 15 minutes by `main`'s `sync:reconcile` artisan command to detect
+  replication drift between the two databases. See `docs/ARCHITECTURE.md`
+  ("Drift detection") for why this exists and what it does (and does not)
+  do about a mismatch it finds.
 
 ## What changed in this modernization pass
 
@@ -126,16 +140,58 @@ and no way to build. This pass:
   both still carried the original plaintext values. See
   `docs/BASELINE.md` for full evidence and the secrets finding.
 
+## Distributed-systems hardening pass
+
+On top of the container baseline (Phase 5) and the dependency/test work
+above, this pass addressed the gaps a replicated, horizontally-scalable
+system actually needs to not silently corrupt data or go dark without
+anyone noticing:
+
+- **Idempotent, order-tolerant replication** — `main`'s job handlers now
+  go through `App\Services\ProductSynchronizer`, which upserts under a
+  row lock with last-write-wins semantics instead of a plain
+  create/find-then-update that crashed on a redelivered or out-of-order
+  RabbitMQ message. See `docs/ARCHITECTURE.md`.
+- **Drift detection** — `admin`'s internal consistency endpoint plus
+  `main`'s scheduled `sync:reconcile` command (above).
+- **Health/readiness probes** wired into both Dockerfiles'
+  `HEALTHCHECK` (above), so an app that's up but can't reach its own
+  database is reported unhealthy instead of "fine" because nginx
+  answers.
+- **Latest stable, verified against the real registries at run time**:
+  `laravel/framework` v13.44.1, `laravel/sanctum` v4.5.0,
+  `laravel/tinker` v3.2.0, `phpunit/phpunit` 13.4.8,
+  `nunomaduro/collision` v8.9.6, and a `phpseclib/phpseclib` CVE fix
+  (3.0.59) that was the actual root cause of recent CI failures.
+- **Dependabot/Renovate cleanup** — the committed `dependabot.yml`
+  pointed at the repo root, where neither app's manifest lives, and
+  duplicated an already-working Renovate installation; replaced with a
+  single policy-compliant `renovate.json`. See `docs/TECHNICAL_DEBT.md`
+  #15.
+- **Removed unused frontend scaffolding** (`package.json`,
+  `vite.config.js`, `resources/{js,css}`) in both apps — default
+  `laravel new` output never built or referenced by either Dockerfile or
+  blade view. See `docs/TECHNICAL_DEBT.md` #16.
+- **Dead code removed**: `TestJob.php` (both apps), the `fire` artisan
+  command that only existed to dispatch it, and `commond.txt` (the
+  author's own shell-history scratch file).
+- **Multi-agent-safe Compose file** — removed hardcoded `container_name:`
+  overrides so Compose's own project-name prefixing (already set up via
+  `name: ms-laravel-rabbitmq-p5`) actually isolates concurrent stacks of
+  this repo instead of colliding on fixed container names.
+- **3-branch model adopted** (`preview -> test -> main`) — see
+  `CONTRIBUTING.md`.
+
 ## Known issues (flagged, not fixed)
 
-- **No `LICENSE` file** anywhere in the repository — outside this
-  task's scope; a licensing decision for the repo owner.
-- **`commond.txt`** — the author's own local shell-command scratch
-  notes from originally building the app (`composer create-project`,
-  `artisan make:*`). Not documentation, left as-is; harmless but not
-  cleaned up here.
 - Neither app has integration tests covering the actual queue-sync
-  flow — `tests/Feature/ExampleTest.php` is still the Laravel
-  boilerplate default in both. The flow was verified manually in
-  Docker for this task (see above), not via an automated test added to
-  the suite.
+  flow end-to-end through a real RabbitMQ broker — the unit/feature
+  tests exercise `ProductSynchronizer`/the job handlers directly, not a
+  real publish-then-consume round trip. The flow was verified manually
+  in Docker for the original modernization pass (see above), not via an
+  automated integration test.
+- `ProductDeleted` has no tombstone — see `docs/ARCHITECTURE.md`'s
+  "Idempotent replication" section for the specific, accepted gap this
+  leaves.
+- PHP 8.6 (latest stable minor) is not yet adopted — see
+  `docs/TECHNICAL_DEBT.md` #21.

@@ -1,0 +1,4 @@
+# Default owner for everything in this repository. Required checks
+# (see .github/workflows/ci.yml) must pass before any PR can merge;
+# this file controls who is requested for review, not what merges.
+* @RasimAghayev
