@@ -4,7 +4,7 @@
 # base - pinned PHP-FPM runtime + the system packages/extensions every later
 # stage needs. Nothing application-specific lives here.
 # ---------------------------------------------------------------------------
-FROM php:8.5-fpm-alpine@sha256:951fb5b1780219b81d5daffa4cebef8e0077c537f3893d9790a5dfcd66ca334d AS base
+FROM php:8.5-fpm-alpine@sha256:51414d5291758fe27f58a64c7e8a078465d32cc7dcef7bda803f5b36019802e0 AS base
 
 # apk upgrade picks up any Alpine 3.24 security patch released after this
 # base image tag was last built (e.g. zlib/musl point releases) - scanned
