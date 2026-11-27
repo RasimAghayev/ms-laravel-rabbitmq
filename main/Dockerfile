@@ -25,7 +25,7 @@ WORKDIR /var/www
 # - the composer:2 image alone doesn't have it.
 # ---------------------------------------------------------------------------
 FROM base AS deps
-COPY --from=composer:2@sha256:3d1eb9437516b0ba88c46a0bb05826451a1ab178d29adacb5ded26dad0899ae4 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2@sha256:5b2137f112f939a92788ceb5e55f54859d9dbf467a44037cf7760bdda949f365 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 COPY composer.json composer.lock* ./
 RUN --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
 # so switching between the two targets never busts either cache.
 # ---------------------------------------------------------------------------
 FROM base AS test-deps
-COPY --from=composer:2@sha256:3d1eb9437516b0ba88c46a0bb05826451a1ab178d29adacb5ded26dad0899ae4 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2@sha256:5b2137f112f939a92788ceb5e55f54859d9dbf467a44037cf7760bdda949f365 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 COPY composer.json composer.lock* ./
 RUN --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
